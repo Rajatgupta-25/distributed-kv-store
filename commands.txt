@@ -1,0 +1,91 @@
+Distributed KV Store
+
+mvn package -DskipTests -f distributed-kv-store/pom.xml
+
+Start 3 node cluster
+Open 3 separate terminal tabs and run one command per tab:
+
+# Terminal 1
+java -jar target/distributed-kv-store-1.0.0.jar \
+  --server.port=8081 \
+  --kvstore.node-id=node1
+
+# Terminal 2
+java -jar target/distributed-kv-store-1.0.0.jar \
+  --server.port=8082 \
+  --kvstore.node-id=node2
+
+# Terminal 3
+java -jar target/distributed-kv-store-1.0.0.jar \
+  --server.port=8083 \
+  --kvstore.node-id=node3
+
+Write a Value
+
+curl -X PUT http://localhost:8081/kv/user:1 \
+  -H "Content-Type: application/json" \
+  -d '{"value": {"name": "Alice", "email": "alice@example.com"}}'
+
+
+Read it back
+curl http://localhost:8081/kv/user:1
+curl http://localhost:8082/kv/user:1   # same result — all nodes have it
+curl http://localhost:8083/kv/user:1
+
+
+Idempotent Write
+curl -X PUT http://localhost:8081/kv/user:1 \
+  -H "Content-Type: application/json" \
+  -H "X-Write-Id: my-unique-id-abc123" \
+  -d '{"value": "Alice"}'
+# Run the same command again — returns success, no duplicate write
+
+
+Test fault tolerance — kill node2, writes still work:
+# Stop Terminal 2 (Ctrl+C)
+curl -X PUT http://localhost:8081/kv/user:2 \
+  -H "Content-Type: application/json" \
+  -d '{"value": "Bob"}'
+# Returns 200 — quorum met with node1 + node3
+
+
+Test quorum failure — kill 2 nodes:
+# Stop Terminal 2 and Terminal 3
+curl -X PUT http://localhost:8081/kv/user:3 \
+  -H "Content-Type: application/json" \
+  -d '{"value": "Charlie"}'
+# Returns 503 — cannot reach quorum (CP behavior)
+
+How to Test a Slow Node 
+# Make node2 respond slowly (3 seconds delay)
+curl -X POST "http://localhost:8082/debug/slow?ms=3000"
+
+# Now write via node1 — should still succeed (node1 + node3 = quorum)
+# node2 times out after 500ms, gets a hint stored
+curl -X PUT http://localhost:8081/kv/foo \
+  -H "Content-Type: application/json" \
+  -d '{"value": "Alice"}'
+
+# Check node1 logs — you'll see:
+# [KvService] Peer node2 unreachable, stored hint for key=foo
+
+# Reset node2 to normal speed
+curl -X POST "http://localhost:8082/debug/slow?ms=0"
+
+# After ~5 seconds, heartbeat fires and drains the hint to node2
+# Check node1 logs:
+# [HealthMonitor] Node node2 recovered, draining hint queue
+# [HealthMonitor] Drained 1 hints to node=node2
+
+
+# Delete a key
+curl -X DELETE http://localhost:8081/kv/user:1
+
+# Idempotent Delete
+curl -X DELETE http://localhost:8081/kv/user:1 \
+  -H "X-Write-Id: my-delete-id-abc123"
+# Same writeId on retry → returns success, no duplicate operation
+
+# Delete a non existent key
+curl -X DELETE http://localhost:8081/kv/nonexistent
+# Response: 404 Not Found

@@ -1,0 +1,24 @@
+# Default config — override per node via environment variables or profiles
+#server:
+  #port: ${NODE_PORT:8081}
+
+kvstore:
+  node-id: ${NODE_ID:node1}
+  # Comma-separated list of ALL nodes including self (used for coordinator election)
+  all-nodes: ${ALL_NODES:node1:8081,node2:8082,node3:8083}
+  # Directory where WAL and snapshot files are stored
+  data-dir: ${DATA_DIR:./data}
+  # How often (ms) to take a snapshot
+  snapshot-interval-ms: ${SNAPSHOT_INTERVAL_MS:300000}
+  # Max WAL entries before forcing a snapshot
+  wal-max-entries: ${WAL_MAX_ENTRIES:1000000}
+  # Timeout (ms) for inter-node HTTP calls
+  replication-timeout-ms: ${REPLICATION_TIMEOUT_MS:500}
+  # How often (ms) to drain hinted handoff queues
+  hinted-handoff-interval-ms: ${HINTED_HANDOFF_INTERVAL_MS:5000}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
