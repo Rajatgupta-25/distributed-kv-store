@@ -1,0 +1,25 @@
+# Exclude build output — the Dockerfile builds the JAR inside Docker
+target/
+
+# Exclude IDE files
+.idea/
+*.iml
+*.iws
+*.ipr
+
+# Exclude local data files (WAL, snapshots) — these belong in Docker volumes
+data/
+
+# Exclude git history
+.git/
+.gitignore
+
+# Exclude docs and scripts (not needed in the image)
+README.md
+commands.txt
+*.txt
+*.md
+
+# Exclude test files — tests run in the builder stage only
+# (we skip tests with -DskipTests in the Dockerfile)
+src/test/

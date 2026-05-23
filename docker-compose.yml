@@ -1,0 +1,113 @@
+version: "3.9"
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Distributed KV Store — 3-node cluster
+#
+# All 3 nodes run the same Docker image but with different environment
+# variables (node ID, port, data directory). They communicate over a
+# shared Docker bridge network (kvstore-net) using container names as
+# hostnames (node1, node2, node3).
+#
+# The ALL_NODES config tells each node about its peers so it can:
+# - Route writes to the correct coordinator
+# - Replicate to peer nodes
+# - Sync WAL on rejoin
+#
+# Usage:
+#   docker compose up --build          # build image and start all 3 nodes
+#   docker compose up -d               # start in background
+#   docker compose down                # stop and remove containers
+#   docker compose down -v             # stop and remove containers + volumes
+# ─────────────────────────────────────────────────────────────────────────────
+
+services:
+
+  node1:
+    build: .
+    container_name: node1
+    hostname: node1
+    environment:
+      NODE_ID: node1
+      NODE_PORT: "8081"
+      # Use container names as hostnames — Docker DNS resolves them on kvstore-net
+      ALL_NODES: "node1:8081,node2:8082,node3:8083"
+      DATA_DIR: /data
+      SNAPSHOT_INTERVAL_MS: "300000"       # snapshot every 5 minutes
+      REPLICATION_TIMEOUT_MS: "500"        # give up on a peer after 500ms
+      HINTED_HANDOFF_INTERVAL_MS: "5000"   # heartbeat every 5 seconds
+    ports:
+      - "8081:8081"    # expose to host for curl testing
+    volumes:
+      - node1-data:/data    # persist WAL + snapshot across container restarts
+    networks:
+      - kvstore-net
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8081/actuator/health"]
+      interval: 10s
+      timeout: 3s
+      start_period: 30s
+      retries: 3
+
+  node2:
+    build: .
+    container_name: node2
+    hostname: node2
+    environment:
+      NODE_ID: node2
+      NODE_PORT: "8082"
+      ALL_NODES: "node1:8081,node2:8082,node3:8083"
+      DATA_DIR: /data
+      SNAPSHOT_INTERVAL_MS: "300000"
+      REPLICATION_TIMEOUT_MS: "500"
+      HINTED_HANDOFF_INTERVAL_MS: "5000"
+    ports:
+      - "8082:8082"
+    volumes:
+      - node2-data:/data
+    networks:
+      - kvstore-net
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8082/actuator/health"]
+      interval: 10s
+      timeout: 3s
+      start_period: 30s
+      retries: 3
+
+  node3:
+    build: .
+    container_name: node3
+    hostname: node3
+    environment:
+      NODE_ID: node3
+      NODE_PORT: "8083"
+      ALL_NODES: "node1:8081,node2:8082,node3:8083"
+      DATA_DIR: /data
+      SNAPSHOT_INTERVAL_MS: "300000"
+      REPLICATION_TIMEOUT_MS: "500"
+      HINTED_HANDOFF_INTERVAL_MS: "5000"
+    ports:
+      - "8083:8083"
+    volumes:
+      - node3-data:/data
+    networks:
+      - kvstore-net
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8083/actuator/health"]
+      interval: 10s
+      timeout: 3s
+      start_period: 30s
+      retries: 3
+
+# ── Named volumes — data persists even if containers are removed ──────────────
+volumes:
+  node1-data:
+  node2-data:
+  node3-data:
+
+# ── Bridge network — containers talk to each other by hostname ────────────────
+networks:
+  kvstore-net:
+    driver: bridge

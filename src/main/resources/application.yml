@@ -1,24 +1,58 @@
-# Default config — override per node via environment variables or profiles
-#server:
-  #port: ${NODE_PORT:8081}
+# ─────────────────────────────────────────────────────────────────────────────
+# Distributed KV Store — application configuration
+#
+# All values can be overridden via:
+#   - Environment variables (Docker / docker-compose)
+#   - Command-line args: --server.port=8082 (local dev)
+#
+# Docker:     set via `environment:` in docker-compose.yml
+# Local dev:  pass as --arg flags or set env vars in terminal
+# ─────────────────────────────────────────────────────────────────────────────
+
+server:
+  port: ${NODE_PORT:8081}
 
 kvstore:
   node-id: ${NODE_ID:node1}
-  # Comma-separated list of ALL nodes including self (used for coordinator election)
+
+  # Comma-separated list of ALL nodes in the cluster (including self).
+  # Format: "nodeId:port"
+  #
+  # Docker:     use container names as hostnames — Docker DNS resolves them.
+  #             e.g., "node1:8081,node2:8082,node3:8083"
+  #             ReplicationClient builds URLs as http://node1:8081, http://node2:8082, etc.
+  #
+  # Local dev:  nodes run on localhost with different ports.
+  #             Override with: --kvstore.all-nodes=node1|localhost:8081,...
+  #             OR add entries to /etc/hosts: 127.0.0.1 node1 node2 node3
   all-nodes: ${ALL_NODES:node1:8081,node2:8082,node3:8083}
-  # Directory where WAL and snapshot files are stored
+
+  # Directory where WAL (wal.log) and snapshot (snapshot.json) files are stored.
+  # Docker:     use a named volume mounted at /data
+  # Local dev:  defaults to ./data relative to working directory
   data-dir: ${DATA_DIR:./data}
-  # How often (ms) to take a snapshot
+
+  # How often (ms) to take a snapshot of the in-memory store.
+  # Lower = faster restart recovery, higher disk I/O.
   snapshot-interval-ms: ${SNAPSHOT_INTERVAL_MS:300000}
-  # Max WAL entries before forcing a snapshot
+
+  # Max WAL entries before forcing a snapshot (bounds WAL file size).
   wal-max-entries: ${WAL_MAX_ENTRIES:1000000}
-  # Timeout (ms) for inter-node HTTP calls
+
+  # Timeout (ms) for inter-node HTTP replication calls.
+  # If a peer doesn't respond within this time, it's treated as unreachable
+  # and a hinted handoff is stored for later delivery.
   replication-timeout-ms: ${REPLICATION_TIMEOUT_MS:500}
-  # How often (ms) to drain hinted handoff queues
+
+  # How often (ms) to run the heartbeat check and drain hinted handoff queues.
   hinted-handoff-interval-ms: ${HINTED_HANDOFF_INTERVAL_MS:5000}
 
+# Expose health endpoint for Docker HEALTHCHECK and monitoring
 management:
   endpoints:
     web:
       exposure:
         include: health,info
+  endpoint:
+    health:
+      show-details: always

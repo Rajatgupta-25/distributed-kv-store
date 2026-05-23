@@ -66,9 +66,9 @@ class KvServiceTest {
         // 3-node cluster, this node is node1
         when(props.getNodeId()).thenReturn("node1");
         when(props.getParsedNodes()).thenReturn(List.of(
-                new KvStoreProperties.NodeDescriptor("node1", 8081),
-                new KvStoreProperties.NodeDescriptor("node2", 8082),
-                new KvStoreProperties.NodeDescriptor("node3", 8083)
+                new KvStoreProperties.NodeDescriptor("node1", "localhost", 8081),
+                new KvStoreProperties.NodeDescriptor("node2", "localhost", 8082),
+                new KvStoreProperties.NodeDescriptor("node3", "localhost", 8083)
         ));
 
         kvService = new KvService(store, walManager, replicationClient,
